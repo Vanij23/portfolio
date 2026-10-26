@@ -264,6 +264,8 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
 .term-out .d{color:var(--muted)}
 .term-out .g{color:#58c26f}
 .term-out .e{color:#ff8a7a}
+.term-out .ai{color:var(--canvas)}
+.term-out .you{color:var(--orange)}
 .term-out a{color:var(--canvas);text-decoration-color:var(--orange)}
 .term-chips{display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 10px}
 .term-chips button{background:rgba(253,251,247,.06);border:1px solid var(--line);color:var(--text);border-radius:999px;padding:4px 12px;font:.78rem var(--mono);cursor:pointer}
@@ -1054,7 +1056,7 @@ function pLink(label,href){var d=document.createElement('div');var a=document.cr
 function jump(id){var el=document.getElementById(id);if(el){closeTerm();el.scrollIntoView({behavior:reduce?'auto':'smooth'})}}
 CMDS.help=function(){
   p('Available commands','p');
-  [['about','who I am'],['skills','what I work with'],['projects','what I have built'],['experience','internship'],['education','degree and CGPA'],
+  [['ask','chat with my AI assistant'],['about','who I am'],['skills','what I work with'],['projects','what I have built'],['experience','internship'],['education','degree and CGPA'],
    ['contact','how to reach me'],['resume','download my resume'],['pipeline','run the AWS pipeline demo'],['globe','check why the planet is or is not spinning'],['neofetch','system info about this page'],
    ['goto <section>','scroll to about, projects, skills...'],['github / linkedin','open my profiles'],['clear','clear the screen'],['exit','close the terminal']
   ].forEach(function(r){p('  '+r[0]+(' '.repeat(Math.max(2,20-r[0].length)))+r[1],'d')});
@@ -1110,7 +1112,90 @@ CMDS.sudo=function(a){
     })();
   }else p('sudo: '+(a.join(' ')||'what?')+': permission denied. Nice try.','e');
 };
+/* ---------- AI chat (built-in assistant + optional live model at /api/chat) ---------- */
+var chat={on:false,busy:false,live:null,msgs:[],announced:false};
+var KB=[
+ {k:['hello','hi','hey','yo','sup','namaste','good morning','good evening'],a:"Hey! I'm the assistant on Vanij's portfolio. Ask me about his projects, skills, internship, education or how to contact him."},
+ {k:['who are you','what are you','are you ai','are you real','are you a bot','chatgpt','claude','gpt','llm','model','how do you work'],a:"I'm a small assistant built into this page. By default I answer from Vanij's resume, using a built-in knowledge base, so my answers are limited to what is on it. If he connects a live model on the server, I upgrade to that automatically."},
+ {k:['who is vanij','about vanij','introduce','summary','yourself','background'],a:"Vanij Raut is a B.Sc. (Hons) Computer Science student at MIT World Peace University, Pune, graduating in 2027. He builds serverless AWS pipelines and full-stack web apps, and he is learning the MERN stack. He is open to internships, trainee and contract roles."},
+ {k:['project','projects','built','build','made','portfolio work','work samples'],a:"Three projects:\n1. AWS Event-Driven Data Processing Pipeline: S3, Lambda, DynamoDB, API Gateway, an EC2 dashboard and CloudWatch, 6 AWS services.\n2. Post-Operative Medication Tracker: a bilingual PWA using Vercel Functions and Upstash Redis with shared real-time sync.\n3. Cloud-Hosted Retro Games Website: a team project hosted on AWS (EC2, S3, RDS, IAM).\nType 'pipeline' to run the live demo of the first one."},
+ {k:['pipeline','event-driven','event driven','lambda','dynamodb','s3','api gateway','serverless','aws project'],a:"The AWS Event-Driven Data Processing Pipeline: a file dropped in S3 triggers a Lambda function, which parses and validates it and writes the items to DynamoDB. API Gateway exposes them and an EC2-hosted dashboard displays the result, with CloudWatch for logs. The demo on this page runs the same flow in your browser. Type 'pipeline' to try it, or upload your own CSV."},
+ {k:['medication','medicine','tracker','pwa','post-operative','post operative','upstash','redis','bilingual'],a:"The Post-Operative Medication Tracker is a bilingual progressive web app (PWA). It runs on Vercel Functions with Upstash Redis for shared real-time sync, so a patient and a caregiver see the same data."},
+ {k:['retro','games','game website','ec2','rds','iam','team project'],a:"The Cloud-Hosted Retro Games Website was a team project hosted on AWS, using EC2, S3, RDS and IAM."},
+ {k:['skill','skills','tech','stack','technologies','language','languages','tools','know','good at'],a:"Languages: JavaScript, Python (basics).\nCloud: EC2, S3, RDS, DynamoDB, Lambda, API Gateway, IAM, CloudWatch, Vercel.\nWeb: HTML5, CSS3, Bootstrap, jQuery.\nTools: Git, GitHub, VS Code, Figma, DaVinci Resolve.\nAI: prompt engineering, Claude, ChatGPT, Gemini.\nLearning: React, Node, Express, DSA."},
+ {k:['aws','cloud','amazon'],a:"Vanij has hands-on AWS experience: EC2, S3, RDS, DynamoDB, Lambda, API Gateway, IAM and CloudWatch, used across his pipeline project and the retro games site. He also deploys on Vercel."},
+ {k:['learning','learn','react','node','express','dsa','mern','udemy','course','certification','certificate','angela'],a:"He is learning React, Node, Express and DSA (the MERN stack direction), and is working through the Full-Stack Web Development course by Angela Yu on Udemy."},
+ {k:['intern','internship','experience','inamigos','job','work experience','ngo'],a:"AI Web Development Intern at InAmigos Foundation (July 2026, remote). He researched 10 Indian NGOs and structured the data, audited the website's UX with annotated screenshots, and built a multi-section prototype site with AI tools."},
+ {k:['education','degree','college','university','mit','wpu','cgpa','gpa','grade','marks','study','studies','school','hsc','graduat'],a:"B.Sc. (Honours) Computer Science at MIT World Peace University, Pune, expected 2027, CGPA 7.99/10 (through 6th semester). Before that: HSC Science at Suryadatta Junior College, Pune, 2023."},
+ {k:['contact','email','mail','reach','phone','hire','hiring','recruit','available','availability','opportunit','open to'],a:"Email: rautvanij@gmail.com\nGitHub: github.com/Vanij23\nLinkedIn: linkedin.com/in/vanij-raut-8b7739376\nHe is open to internships, trainee and contract roles. Type 'sudo hire vanij' for a shortcut."},
+ {k:['github','repo','repository','source','code'],a:"His GitHub is github.com/Vanij23. This site's source is in the 'portfolio' repository there. Type 'github' to open it."},
+ {k:['linkedin'],a:"His LinkedIn is linkedin.com/in/vanij-raut-8b7739376. Type 'linkedin' to open it."},
+ {k:['resume','cv'],a:"Type 'resume' and the PDF downloads, or use the avatar panel at the top right."},
+ {k:['location','where','live','pune','india','city','based'],a:"Vanij is based in Pune, India. The internship at InAmigos Foundation was remote."},
+ {k:['site','website','page','built with','framework','font','how was this','this portfolio'],a:"This site is plain HTML, CSS and JavaScript with no frameworks, the Inter font, a canvas globe, a CSV-driven pipeline demo and this terminal. It is hosted on Vercel from GitHub."},
+ {k:['globe','planet','earth'],a:"The globe is a canvas drawn procedurally in JavaScript. It spins on its own axis and leans toward your cursor like gravity. Type 'globe' for diagnostics."},
+ {k:['thanks','thank you','thx','cool','nice','great','awesome'],a:"Glad to help! Anything else you'd like to know about Vanij?"},
+ {k:['bye','goodbye','see you'],a:"Bye! Type 'exit' to leave chat mode."}
+];
+var SUGGEST=['what projects has he built?','tell me about the AWS pipeline','what are his skills?','internship experience?','how can I contact him?','exit'];
+function kbAnswer(q){
+  var s=' '+q.toLowerCase().replace(/[^a-z0-9+#.\- ]/g,' ').replace(/\s+/g,' ')+' ',words=s.trim().split(' '),best=null,bs=0;
+  KB.forEach(function(e){
+    var sc=0;
+    e.k.forEach(function(k){
+      if(k.indexOf(' ')>=0){if(s.indexOf(' '+k+' ')>=0||s.indexOf(k)>=0)sc+=3}
+      else words.forEach(function(w){if(w===k||(k.length>4&&w.indexOf(k)===0))sc+=(k.length>4?2:1)});
+    });
+    if(sc>bs){bs=sc;best=e}
+  });
+  return bs>0?best.a:"I only know what is on Vanij's resume, and I couldn't match that. Try asking about his projects, skills, internship, education or contact details.";
+}
+async function typeOut(text,cls){
+  var d=document.createElement('div');d.className=cls||'';out.appendChild(d);
+  if(reduce){d.textContent=text;out.scrollTop=out.scrollHeight;return}
+  for(var i=0;i<text.length;i+=3){d.textContent=text.slice(0,i+3);out.scrollTop=out.scrollHeight;await sleep(12)}
+  d.textContent=text;out.scrollTop=out.scrollHeight;
+}
+async function liveAnswer(){
+  if(chat.live===false||location.protocol==='file:')return null;
+  var ctl=('AbortController' in window)?new AbortController():null,t=setTimeout(function(){ctl&&ctl.abort()},9000);
+  try{
+    var r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:chat.msgs.slice(-6)}),signal:ctl?ctl.signal:undefined});
+    clearTimeout(t);
+    if(!r.ok){if(r.status===404||r.status===405||r.status===501||r.status===503)chat.live=false;return null}
+    var j=await r.json();
+    if(j&&typeof j.reply==='string'&&j.reply.trim()){chat.live=true;return j.reply.trim()}
+    return null;
+  }catch(e){clearTimeout(t);return null}
+}
+async function chatTurn(q){
+  if(chat.busy)return;
+  if(/^\/?(exit|quit|bye|leave|back)$/i.test(q)){leaveChat();return}
+  if(/^\/?clear$/i.test(q)){out.innerHTML='';return}
+  if(q.length>400){p('Please keep questions under 400 characters.','e');return}
+  chat.busy=true;chat.msgs.push({role:'user',content:q});
+  var th=p('ai> thinking ...','d');
+  var live=await liveAnswer(),ans=live||kbAnswer(q);
+  th.remove();
+  if(live&&!chat.announced){chat.announced=true;p('(connected to the live model)','d')}
+  chat.msgs.push({role:'assistant',content:ans});
+  await typeOut('ai> '+ans,'ai');
+  chat.busy=false;
+}
+function enterChat(first){
+  chat.on=true;$('#termForm label').textContent='you>';cmd.setAttribute('aria-label','Chat message');cmd.placeholder='ask me anything about Vanij';
+  setChips(SUGGEST);
+  p("AI assistant. Ask about Vanij's projects, skills, internship, education or contact details.",'p');
+  p("Answers come from his resume. Type 'exit' to go back to the terminal.",'d');
+  if(first)return chatTurn(first);
+}
+function leaveChat(){
+  chat.on=false;chat.msgs=[];$('#termForm label').textContent='vanij@portfolio:~$';cmd.setAttribute('aria-label','Terminal command');cmd.placeholder='';
+  setChips(CHIPS_MAIN);p('Left chat mode.','d');
+}
+CMDS.ask=CMDS.ai=CMDS.chat=function(a){enterChat(a.join(' ').trim())};
 function run(raw){
+  if(chat.on){var q=raw.trim();if(!q)return;p('you> '+q,'you');chatTurn(q);return}
   var s=raw.trim();p('vanij@portfolio:~$ '+s,'d');if(!s)return;
   var parts=s.split(/\s+/),c=parts[0].toLowerCase(),args=parts.slice(1);
   if(CMDS[c]&&Object.prototype.hasOwnProperty.call(CMDS,c))CMDS[c](args);
@@ -1125,7 +1210,9 @@ function closeTerm(){term.hidden=true;document.body.style.overflow='';if(lastFoc
 $$('[data-open-console]').forEach(function(b){b.addEventListener('click',openTerm)});
 $('#termClose').addEventListener('click',closeTerm);
 term.addEventListener('mousedown',function(e){if(e.target===term)closeTerm()});
-$('#chips').innerHTML=['help','about','skills','projects','contact','pipeline','sudo hire vanij'].map(function(c){return '<button type="button" data-c="'+c+'">'+c+'</button>'}).join('');
+var CHIPS_MAIN=['ask','help','about','skills','projects','contact','pipeline','sudo hire vanij'];
+function setChips(list){$('#chips').innerHTML=list.map(function(c){return '<button type="button" data-c="'+c.replace(/"/g,'&quot;')+'">'+c.replace(/</g,'&lt;')+'</button>'}).join('')}
+setChips(CHIPS_MAIN);
 $('#chips').addEventListener('click',function(e){var c=e.target.getAttribute&&e.target.getAttribute('data-c');if(c){hist.push(c);hi=hist.length;run(c);cmd.focus()}});
 $('#termForm').addEventListener('submit',function(e){e.preventDefault();var v=cmd.value;cmd.value='';if(v.trim()){hist.push(v);hi=hist.length}run(v)});
 cmd.addEventListener('keydown',function(e){
